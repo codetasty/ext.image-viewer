@@ -58,6 +58,11 @@ define(function(require, exports, module) {
 		},
 		build: function(id, elem) {
 			$(elem).append('<div class="holder image-holder"><div class="table"><div class="table-cell"></div></div><div class="image-size"></div></div>');
+			
+			
+			$(elem).find('.image-holder').on('click', function() {
+				EditorSplit.active = parseInt(id);
+			});
 		},
 		getElem: function(id) {
 			return $(Editor.elem).find('.image-holder img[data-id=' + id + ']');
