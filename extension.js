@@ -5,6 +5,7 @@ define(function(require, exports, module) {
 	var Socket = require('code/socket');
 	var Fn = require('code/fn');
 	var Workspace = require('code/workspace');
+	var FileManager = require('code/fileManager');
 	
 	var Editor = require('modules/editor/editor');
 	var EditorSession = require('modules/editor/ext/session');
@@ -107,48 +108,32 @@ define(function(require, exports, module) {
 				this.build(id, storage);
 			},
 			build: function(id, data) {
-				Socket.send('workspace.action', {
-					id: data.workspaceId,
-					path: data.path,
-					action: 'get',
-					forceRemote: true
-				}, false, function(data, stream) {
-					if (stream) {
-						data.data = '';
-						stream.on('data', function(e) {
-							for (var i = 0; i < e.length; i++) {
-								data.data += String.fromCharCode(e[i]);
-							}
-						});
+				FileManager.getFile(data.workspaceId, data.path, null, function(file, data) {
+					var id = EditorSession.isOpenedByData('image', data.id, data.path);
+					
+					var sess = EditorSession.getStorage().sessions[id];
+					
+					if (sess) {
+						var cell = EditorSplit.getSplit(sess.split).find('.image-holder .table-cell');
 						
-						stream.on('end', function(e) {
-							var id = EditorSession.isOpenedByData('image', data.id, data.path);
-							
-							var sess = EditorSession.getStorage().sessions[id];
-							
-							if (sess) {
-								var cell = EditorSplit.getSplit(sess.split).find('.image-holder .table-cell');
-								
-								var img = document.createElement('img');
-								img.setAttribute('data-id', id);
-								img.src = 'data:' + Extension.getMimeName(data.path) + ';base64,' + btoa(data.data);
-								img.style.display = 'none';
-								img.style.maxHeight = $(cell).parent().parent().height() + 'px';
-								// $(cell).find('img').hide();
-								$(cell).append(img);
-								
-								var sessData = EditorSession.sessions[id];
-								sessData.status = 2;
-								EditorSession.statusUpdated(id);
-								
-								if (sess.active) {
-									Extension.session.active({id: id, data: sess});
-								}
-							}
-						});
-					} else if (data.status === 0) {
-						EditorSession.close(EditorSession.isOpenedByData('image', data.id, data.path));
+						var img = document.createElement('img');
+						img.setAttribute('data-id', id);
+						img.src = 'data:' + Extension.getMimeName(data.path) + ';base64,' + btoa(file);
+						img.style.display = 'none';
+						img.style.maxHeight = $(cell).parent().parent().height() + 'px';
+						// $(cell).find('img').hide();
+						$(cell).append(img);
+						
+						var sessData = EditorSession.sessions[id];
+						sessData.status = 2;
+						EditorSession.statusUpdated(id);
+						
+						if (sess.active) {
+							Extension.session.active({id: id, data: sess});
+						}
 					}
+				}, function(data) {
+					EditorSession.close(EditorSession.isOpenedByData('image', data.id, data.path));
 				});
 			},
 			active: function(data) {
