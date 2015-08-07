@@ -97,7 +97,7 @@ define(function(require, exports, module) {
 				if (!opened) {
 					storage = $.extend(true, storage, {
 						name: Fn.pathinfo(storage.path).basename,
-						type: 'image',
+						type: 'design_image',
 						extension: Fn.pathinfo(storage.path).extension
 					});
 					EditorSession.saveStorage();
