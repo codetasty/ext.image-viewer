@@ -97,7 +97,8 @@ define(function(require, exports, module) {
 				if (!opened) {
 					storage = $.extend(true, storage, {
 						name: Fn.pathinfo(storage.path).basename,
-						type: 'design_image',
+						icon: 'design_image',
+						type: 'image',
 						extension: Fn.pathinfo(storage.path).extension
 					});
 					EditorSession.saveStorage();
@@ -109,8 +110,6 @@ define(function(require, exports, module) {
 			},
 			build: function(id, data) {
 				FileManager.getFile(data.workspaceId, data.path, null, function(file, data) {
-					var id = EditorSession.isOpenedByData('image', data.id, data.path);
-					
 					var sess = EditorSession.getStorage().sessions[id];
 					
 					if (sess) {
@@ -121,6 +120,7 @@ define(function(require, exports, module) {
 						img.src = 'data:' + Extension.getMimeName(data.path) + ';base64,' + btoa(file);
 						img.style.display = 'none';
 						img.style.maxHeight = $(cell).parent().parent().height() + 'px';
+						img.dataset.size = file.length;
 						// $(cell).find('img').hide();
 						$(cell).append(img);
 						
@@ -140,10 +140,10 @@ define(function(require, exports, module) {
 				var cell = EditorSplit.getSplit(data.data.split).find('.image-holder .table-cell');
 				
 				$(cell).find('img').hide();
-				var img = $(cell).find('img[data-id="' + data.id + '"]').show();
+				var $img = $(cell).find('img[data-id="' + data.id + '"]').show();
 				
-				if ($(img).length) {
-					$(cell).parent().parent().find('.image-size').html($(img)[0].naturalWidth + 'x' + $(img)[0].naturalHeight);
+				if ($img.length) {
+					$(cell).parent().parent().find('.image-size').html($img[0].naturalWidth + 'x' + $img[0].naturalHeight + ' (' + FileManager.fileSize($img.attr('data-size')) + ')');
 				}
 				
 			},
