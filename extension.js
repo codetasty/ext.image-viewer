@@ -27,10 +27,10 @@ define(function(require, exports, module) {
 				Extension.build(i, EditorSplit.getSplit(i).find('.box-container-inner'));
 			}
 			
-			EditorSplit.on('moveSession', function(data) {
-				if (data.type == 'image') {
-					var box = EditorSplit.getSplit(data.split).find('.image-holder .table-cell');
-					_self.getElem(data.id).appendTo(box);
+			EditorSplit.on('moveSession', function(e) {
+				if (e.storage.type == 'image') {
+					var box = EditorSplit.getSplit(e.split).find('.image-holder .table-cell');
+					_self.getElem(e.sessionId).appendTo(box);
 				}
 			});
 			
