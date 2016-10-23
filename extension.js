@@ -29,23 +29,9 @@ define(function(require, exports, module) {
 			
 			EditorSplit.on('moveSession', function(e) {
 				if (e.storage.type == 'image') {
-					var box = EditorSplit.getSplit(e.split).find('.image-holder .table-cell');
+					var box = EditorSplit.getSplit(e.split).find('.image-holder');
 					_self.getElem(e.sessionId).appendTo(box);
 				}
-			});
-			
-			EditorSplit.on('resize', function() {
-				$(Editor.elem).find('.image-holder').each(function() {
-					var height = $(this).height();
-					$(this).find('img').css({maxHeight: height});
-				});
-			});
-			
-			$(window).on('resize', function() {
-				$(Editor.elem).find('.image-holder').each(function() {
-					var height = $(this).height();
-					$(this).find('img').css({maxHeight: height});
-				});
 			});
 			
 			EditorSession.registerSessionHandler({
@@ -54,19 +40,15 @@ define(function(require, exports, module) {
 				},
 				open: Extension.session.open.bind(Extension.session),
 				active: Extension.session.active.bind(Extension.session),
+				focus: Extension.session.focus.bind(Extension.session),
 				close: Extension.session.close.bind(Extension.session)
 			});
 		},
 		build: function(id, elem) {
-			$(elem).append('<div class="holder image-holder"><div class="table"><div class="table-cell"></div></div><div class="image-size"></div></div>');
-			
-			
-			$(elem).find('.image-holder').on('click', function() {
-				EditorSplit.active = parseInt(id);
-			});
+			$(elem).append('<div class="holder image-holder"></div>');
 		},
 		getElem: function(id) {
-			return $(Editor.elem).find('.image-holder img[data-id=' + id + ']');
+			return Editor.$el.find('.image-holder .image[data-id=' + id + ']');
 		},
 		getMimeName: function(path) {
 			var res = 'image/png';
@@ -92,7 +74,7 @@ define(function(require, exports, module) {
 				var id = data.id;
 				var opened = data.opened;
 				var storage = data.data;
-				var sess = data.session;
+				var session = data.session;
 				
 				if (!opened) {
 					storage = $.extend(true, storage, {
@@ -106,51 +88,84 @@ define(function(require, exports, module) {
 					path = storage.path;
 				}
 				
+				session.size = null;
+				session.mimeType = null;
+				session.width = null;
+				session.height = null;
+				
 				this.build(id, storage);
 			},
 			build: function(id, data) {
+				var $holder = EditorSplit.getSplit(data.split).find('.image-holder');
+				var $img = $('<div class="image" data-id="' + id + '"></div>')
+				.hide().click(function() {
+					EditorSession.setFocus(id);
+				});
+				
+				$holder.append($img);
+				
 				FileManager.getFile(data.workspaceId, data.path, null, function(file, data) {
-					var sess = EditorSession.getStorage().sessions[id];
+					var storage = EditorSession.getStorage().sessions[id];
 					
-					if (sess) {
-						var cell = EditorSplit.getSplit(sess.split).find('.image-holder .table-cell');
-						
-						var img = document.createElement('img');
-						img.setAttribute('data-id', id);
-						img.src = 'data:' + Extension.getMimeName(data.path) + ';base64,' + btoa(file);
-						img.style.display = 'none';
-						img.style.maxHeight = $(cell).parent().parent().height() + 'px';
-						img.dataset.size = file.length;
-						// $(cell).find('img').hide();
-						$(cell).append(img);
-						
-						var sessData = EditorSession.sessions[id];
-						sessData.status = 2;
-						EditorSession.statusUpdated(id);
-						
-						if (sess.active) {
-							Extension.session.active({id: id, data: sess});
-						}
+					if (!storage) {
+						return false;
+					}
+					
+					var img = document.createElement('img');
+					img.src = 'data:' + Extension.getMimeName(data.path) + ';base64,' + btoa(file);
+					img.dataset.size = file.length;
+					$img.append(img);
+					
+					var session = EditorSession.sessions[id];
+					session.size = file.length;
+					session.mimeType = Extension.getMimeName(data.path);
+					session.width = img.naturalWidth;
+					session.height = img.naturalHeight;
+					
+					EditorSession.updateStatus(id, 2);
+					
+					if (session.focus) {
+						EditorSession.onFocusChange(true);
 					}
 				}, function(data) {
 					EditorSession.close(EditorSession.isOpenedByData('image', data.id, data.path));
 				});
 			},
 			active: function(data) {
-				var cell = EditorSplit.getSplit(data.data.split).find('.image-holder .table-cell');
+				var $holder = EditorSplit.getSplit(data.data.split).find('.image-holder');
 				
-				$(cell).find('img').hide();
-				var $img = $(cell).find('img[data-id="' + data.id + '"]').show();
+				$holder.find('.image').hide().filter('[data-id="' + data.id + '"]').show();
+			},
+			focus: function(data, $toolbar) {
+				var $workspace = $('<li class="sticky"></li>').text(Workspace.getFromList(data.storage.workspaceId).name);
 				
-				if ($img.length) {
-					$(cell).parent().parent().find('.image-size').html($img[0].naturalWidth + 'x' + $img[0].naturalHeight + ' (' + FileManager.fileSize($img.attr('data-size')) + ')');
+				var $path = $('<li class="sticky"></li>');
+				$path.text(data.storage.isNew ? __('New file') : data.storage.name);
+				
+				$toolbar.children('.toolbar-left').append($workspace);
+				$toolbar.children('.toolbar-left').append($path);
+				
+				if (data.session.size === null) {
+					return;
 				}
 				
+				var $res = $('<li></li>');
+				$res.text(data.session.width + 'x' + data.session.height + 'px');
+				
+				var $size = $('<li></li>');
+				$size.text(FileManager.fileSize(data.session.size));
+				
+				var $mime = $('<li></li>');
+				$mime.text(data.session.mimeType);
+				
+				$toolbar.children('.toolbar-right').append($res);
+				$toolbar.children('.toolbar-right').append($size);
+				$toolbar.children('.toolbar-right').append($mime);
 			},
 			close: function(data) {
-				var cell = EditorSplit.getSplit(data.data.split).find('.image-holder .table-cell');
+				var $holder = EditorSplit.getSplit(data.data.split).find('.image-holder');
 				
-				$(cell).find('img[data-id="' + data.id + '"]').remove();
+				$holder.find('.image[data-id="' + data.id + '"]').remove();
 			}
 		}
 	});

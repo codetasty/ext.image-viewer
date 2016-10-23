@@ -1,21 +1,13 @@
-.module-editor .editor-container .editor-box .box-container .image-holder img {
+.module-editor .editor-container .editor-box .box-container .image-holder .image {
+  position: relative;
+  height: 100%;
+}
+.module-editor .editor-container .editor-box .box-container .image-holder .image img {
+  display: block;
   max-width: 100%;
   max-height: 100%;
-  display: block;
-  margin: 0 auto;
-}
-.module-editor .editor-container .editor-box .box-container .image-holder .image-size {
   position: absolute;
-  bottom: 11px;
-  right: 11px;
-  background: #1D1F21;
-  padding: 3px 5px;
-  color: #909090;
-  font: 10px / normal 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace;
-  border-radius: 2px;
-  z-index: 9;
-}
-.light .module-editor .editor-container .editor-box .box-container .image-holder .image-size {
-  background: #ffffff;
-  color: #505050;
+  top: 50%;
+  left: 50%;
+  transform: translate3d(-50%, -50%, 0);
 }
