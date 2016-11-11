@@ -18,22 +18,16 @@ define(function(require, exports, module) {
 	}, {
 		init: function() {
 			var _self = this;
-			EditorSplit.on('open', function(id) {
-				Extension.build(id, EditorSplit.getSplit(id).find('.box-container-inner'));
-			});
+			EditorSplit.on('open', this.onSplitOpen);
 			
 			for (var i in EditorSplit.getStorage().splits) {
 				Extension.build(i, EditorSplit.getSplit(i).find('.box-container-inner'));
 			}
 			
-			EditorSplit.on('moveSession', function(e) {
-				if (e.storage.type == 'image') {
-					var box = EditorSplit.getSplit(e.split).find('.image-holder');
-					_self.getElem(e.sessionId).appendTo(box);
-				}
-			});
+			EditorSplit.on('moveSession', this.onMoveSession);
 			
 			EditorSession.registerSessionHandler({
+				name: this.name,
 				canHandle: function(data) {
 					return (data.data.type == 'file' && ['png', 'jpg', 'jpeg', 'gif'].indexOf(Fn.pathinfo(data.data.path).extension) !== -1) || data.data.type == 'image' ? 'image' : false;
 				},
@@ -42,6 +36,27 @@ define(function(require, exports, module) {
 				focus: Extension.session.focus.bind(Extension.session),
 				close: Extension.session.close.bind(Extension.session)
 			});
+		},
+		destroy: function(e) {
+			EditorSplit.off('open', this.onSplitOpen);
+			EditorSplit.off('moveSession', this.onMoveSession);
+			
+			EditorSession.removeSessionHandler(this.name);
+			
+			for (var i in EditorSession.getStorage().sessions) {
+				if (EditorSession.getStorage().sessions[i].type == 'image') {
+					EditorSession.close(i);
+				}
+			}
+		},
+		onSplitOpen: function(id) {
+			Extension.build(id, EditorSplit.getSplit(id).find('.box-container-inner'));
+		},
+		onMoveSession: function(e) {
+			if (e.storage.type == 'image') {
+				var box = EditorSplit.getSplit(e.split).find('.image-holder');
+				Extension.getElem(e.sessionId).appendTo(box);
+			}
 		},
 		build: function(id, elem) {
 			$(elem).append('<div class="holder image-holder"></div>');
