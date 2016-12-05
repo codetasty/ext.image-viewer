@@ -4,6 +4,7 @@ define(function(require, exports, module) {
 	var Socket = require('core/socket');
 	var Fn = require('core/fn');
 	var Workspace = require('core/workspace');
+	var Crypto = require('core/crypto');
 	var FileManager = require('core/fileManager');
 	
 	var Editor = require('modules/editor/editor');
@@ -118,10 +119,16 @@ define(function(require, exports, module) {
 				
 				$holder.append($img);
 				
-				FileManager.getFile(data.workspaceId, data.path, null, function(file, data) {
+				FileManager.get(data.workspaceId, data.path, null, function(file, data) {
 					var storage = EditorSession.getStorage().sessions[id];
 					
 					if (!storage) {
+						return false;
+					}
+					
+					if (!file) {
+						EditorSession.close(EditorSession.isOpenedByData('image', data.id, data.path));
+						
 						return false;
 					}
 					
@@ -141,8 +148,6 @@ define(function(require, exports, module) {
 					if (session.focus) {
 						EditorSession.onFocusChange(true);
 					}
-				}, function(data) {
-					EditorSession.close(EditorSession.isOpenedByData('image', data.id, data.path));
 				});
 			},
 			active: function(data) {
