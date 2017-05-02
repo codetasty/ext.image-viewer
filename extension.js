@@ -1,4 +1,6 @@
 define(function(require, exports, module) {
+	'use strict';
+	
 	var ExtensionManager = require('core/extensionManager');
 	
 	var Socket = require('core/socket');
@@ -19,18 +21,21 @@ define(function(require, exports, module) {
 	}, {
 		init: function() {
 			var _self = this;
-			EditorSplit.on('open', this.onSplitOpen);
 			
-			for (var i in EditorSplit.getStorage().splits) {
-				Extension.build(i, EditorSplit.getSplit(i).find('.box-container-inner'));
-			}
+			EditorSplit.splitCall(function() {
+				if (this.supports('image')) {
+					Extension.build(this);
+				}
+			});
+			
+			EditorSplit.on('open', this.onSplitOpen);
 			
 			EditorSplit.on('moveSession', this.onMoveSession);
 			
 			EditorSession.registerSessionHandler({
 				name: this.name,
 				canHandle: function(data) {
-					return (data.data.type == 'file' && ['png', 'jpg', 'jpeg', 'gif'].indexOf(Fn.pathinfo(data.data.path).extension) !== -1) || data.data.type == 'image' ? 'image' : false;
+					return data.type == 'image' || (data.type == 'file' && ['png', 'jpg', 'jpeg', 'gif'].indexOf(Fn.pathinfo(data.path).extension) !== -1) ? 'image' : false;
 				},
 				open: Extension.session.open.bind(Extension.session),
 				active: Extension.session.active.bind(Extension.session),
@@ -45,25 +50,23 @@ define(function(require, exports, module) {
 			EditorSession.removeSessionHandler(this.name);
 			
 			for (var i in EditorSession.getStorage().sessions) {
-				if (EditorSession.getStorage().sessions[i].type == 'image') {
+				if (EditorSession.getStorage().sessions[i].type === 'image') {
 					EditorSession.close(i);
 				}
 			}
 		},
-		onSplitOpen: function(id) {
-			Extension.build(id, EditorSplit.getSplit(id).find('.box-container-inner'));
+		onSplitOpen: function(split) {
+			Extension.build(split);
 		},
-		onMoveSession: function(e) {
-			if (e.storage.type == 'image') {
-				var box = EditorSplit.getSplit(e.split).find('.image-holder');
-				Extension.getElem(e.sessionId).appendTo(box);
+		onMoveSession: function(session, split) {
+			if (session.storage.type === 'image') {
+				// var box = EditorSplit.getSplit(e.split).find('.image-holder');
+				// Extension.getElem(e.sessionId).appendTo(box);
+				session.$image.appendTo(split.$el.find('.image-holder'));
 			}
 		},
-		build: function(id, elem) {
-			$(elem).append('<div class="holder image-holder"></div>');
-		},
-		getElem: function(id) {
-			return Editor.$el.find('.image-holder .image[data-id=' + id + ']');
+		build: function(split) {
+			split.$el.find('.box-container-inner').append('<div class="holder image-holder"></div>');
 		},
 		getMimeName: function(path) {
 			var res = 'image/png';
@@ -85,22 +88,17 @@ define(function(require, exports, module) {
 			return res;
 		},
 		session: {
-			open: function(data) {
-				var id = data.id;
-				var opened = data.opened;
-				var storage = data.data;
-				var session = data.session;
+			open: function(session) {
+				var opened = session.opened;
 				
 				if (!opened) {
-					storage = $.extend(true, storage, {
-						name: Fn.pathinfo(storage.path).basename,
+					session.storage = $.extend(true, session.storage, {
+						name: Fn.pathinfo(session.storage.path).basename,
 						icon: 'design_image',
 						type: 'image',
-						extension: Fn.pathinfo(storage.path).extension
+						extension: Fn.pathinfo(session.storage.path).extension
 					});
 					EditorSession.saveStorage();
-				} else {
-					path = storage.path;
 				}
 				
 				session.size = null;
@@ -108,83 +106,95 @@ define(function(require, exports, module) {
 				session.width = null;
 				session.height = null;
 				
-				this.build(id, storage);
+				this.build(session);
 			},
-			build: function(id, data) {
-				var $holder = EditorSplit.getSplit(data.split).find('.image-holder');
-				var $img = $('<div class="image" data-id="' + id + '"></div>')
+			build: function(session) {
+				var id = session.id;
+				
+				session.$image = $('<div class="image" data-id="' + session.id + '"></div>')
 				.hide().click(function() {
-					EditorSession.setFocus(id);
+					EditorSession.setFocus(session.id);
 				});
 				
-				$holder.append($img);
+				EditorSplit.get(session.storage.split).$el
+				.find('.image-holder').append(session.$image);
 				
-				FileManager.get(data.workspaceId, data.path, null, function(file, data) {
-					var storage = EditorSession.getStorage().sessions[id];
-					
-					if (!storage) {
-						return false;
-					}
-					
-					if (!file) {
-						EditorSession.close(EditorSession.isOpenedByData('image', data.id, data.path));
+				FileManager.get({
+					id: session.storage.workspaceId,
+					path: session.storage.path,
+					buffer: true,
+					file: function(file) {
+						if (!session.storage) {
+							return;
+						}
 						
-						return false;
-					}
-					
-					var img = document.createElement('img');
-					img.src = 'data:' + Extension.getMimeName(data.path) + ';base64,' + btoa(file);
-					img.dataset.size = file.length;
-					$img.append(img);
-					
-					var session = EditorSession.sessions[id];
-					session.size = file.length;
-					session.mimeType = Extension.getMimeName(data.path);
-					session.width = img.naturalWidth;
-					session.height = img.naturalHeight;
-					
-					EditorSession.updateStatus(id, 2);
-					
-					if (session.focus) {
-						EditorSession.onFocusChange(true);
+						if (!file) {
+							EditorSession.close(session.id);
+							
+							return false;
+						}
+						
+						var img = document.createElement('img');
+						img.onload = function() {
+							session.width = img.naturalWidth;
+							session.height = img.naturalHeight;
+							
+							if (session.focus) {
+								EditorSession.checkFocus(session);
+							}
+						};
+						img.src = 'data:' + Extension.getMimeName(session.storage.path) + ';base64,' + file.toString('base64');
+						img.dataset.size = file.length;
+						
+						session.size = file.length;
+						session.mimeType = Extension.getMimeName(session.storage.path);
+						session.width = img.naturalWidth;
+						session.height = img.naturalHeight;
+						
+						session.$image.append(img);
+						
+						session.status = EditorSession.status.READY;
+						
+						if (session.focus) {
+							EditorSession.checkFocus(session);
+						}
 					}
 				});
 			},
-			active: function(data) {
-				var $holder = EditorSplit.getSplit(data.data.split).find('.image-holder');
-				
-				$holder.find('.image').hide().filter('[data-id="' + data.id + '"]').show();
+			active: function(session) {
+				session.$image.parent().children().hide();
+				session.$image.show();
 			},
-			focus: function(data, $toolbar) {
-				var $workspace = $('<li class="sticky"></li>').text(Workspace.getFromList(data.storage.workspaceId).name);
+			focus: function(session, $toolbar) {
+				var $workspace = $('<li class="sticky"></li>').text(Workspace.get(session.storage.workspaceId).name);
 				
 				var $path = $('<li class="sticky"></li>');
-				$path.text(data.storage.isNew ? __('New file') : data.storage.name);
+				$path.text(session.storage.isNew ? __('New file') : session.storage.name);
 				
 				$toolbar.children('.toolbar-left').append($workspace);
 				$toolbar.children('.toolbar-left').append($path);
 				
-				if (data.session.size === null) {
+				if (session.size === null) {
 					return;
 				}
 				
 				var $res = $('<li></li>');
-				$res.text(data.session.width + 'x' + data.session.height + 'px');
+				$res.text(session.width + 'x' + session.height + 'px');
 				
 				var $size = $('<li></li>');
-				$size.text(FileManager.fileSize(data.session.size));
+				$size.text(FileManager.fileSize(session.size));
 				
 				var $mime = $('<li></li>');
-				$mime.text(data.session.mimeType);
+				$mime.text(session.mimeType);
 				
 				$toolbar.children('.toolbar-right').append($res);
 				$toolbar.children('.toolbar-right').append($size);
 				$toolbar.children('.toolbar-right').append($mime);
 			},
-			close: function(data) {
-				var $holder = EditorSplit.getSplit(data.data.split).find('.image-holder');
-				
-				$holder.find('.image[data-id="' + data.id + '"]').remove();
+			close: function(session) {
+				if (session.$image) {
+					session.$image.remove();
+				}
 			}
 		}
 	});
