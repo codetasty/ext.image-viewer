@@ -119,6 +119,9 @@ define(function(require, exports, module) {
 				EditorSplit.get(session.storage.split).$el
 				.find('.image-holder').append(session.$image);
 				
+				session.status = EditorSession.status.DOWNLOADING;
+				session.indicatorStatus = EditorSession.indicatorStatus.DOWNLOADING;
+				
 				FileManager.get({
 					id: session.storage.workspaceId,
 					path: session.storage.path,
@@ -154,6 +157,7 @@ define(function(require, exports, module) {
 						session.$image.append(img);
 						
 						session.status = EditorSession.status.READY;
+						session.indicatorStatus = EditorSession.indicatorStatus.DEFAULT;
 						
 						if (session.focus) {
 							EditorSession.checkFocus(session);
