@@ -1,35 +1,48 @@
+/* global define, $, config */
+"use strict";
+
 define(function(require, exports, module) {
-	'use strict';
+	const ExtensionManager = require('core/extensionManager');
 	
-	var ExtensionManager = require('core/extensionManager');
+	const Socket = require('core/socket');
+	const Fn = require('core/fn');
+	const Workspace = require('core/workspace');
+	const Crypto = require('core/crypto');
+	const FileManager = require('core/fileManager');
 	
-	var Socket = require('core/socket');
-	var Fn = require('core/fn');
-	var Workspace = require('core/workspace');
-	var Crypto = require('core/crypto');
-	var FileManager = require('core/fileManager');
+	const Editor = require('modules/editor/editor');
+	const EditorSession = require('modules/editor/ext/session');
+	const EditorSplit = require('modules/editor/ext/split');
 	
-	var Editor = require('modules/editor/editor');
-	var EditorSession = require('modules/editor/ext/session');
-	var EditorSplit = require('modules/editor/ext/split');
-	
-	var Extension = ExtensionManager.register({
-		name: 'image-viewer',
-		css: [
-			'extension'
-		]
-	}, {
-		init: function() {
+	class Extension extends ExtensionManager.Extension {
+		constructor() {
+			super({
+				name: 'image-viewer',
+				css: [
+					'extension',
+				]
+			});
+			
+			this.onSplitOpen = this.onSplitOpen.bind(this);
+			this.onMoveSession = this.onMoveSession.bind(this);
+			
+			this.sessionOpen = this.sessionOpen.bind(this);
+			this.sessionActive = this.sessionActive.bind(this);
+			this.sessionFocus = this.sessionFocus.bind(this);
+			this.sessionClose = this.sessionClose.bind(this);
+		}
+		
+		init() {
+			super.init();
 			var _self = this;
 			
-			EditorSplit.splitCall(function() {
-				if (this.supports('image')) {
-					Extension.build(this);
+			EditorSplit.splitCall((split) => {
+				if (split.supports('image')) {
+					this.build(split);
 				}
 			});
 			
 			EditorSplit.on('open', this.onSplitOpen);
-			
 			EditorSplit.on('moveSession', this.onMoveSession);
 			
 			EditorSession.registerSessionHandler({
@@ -37,13 +50,16 @@ define(function(require, exports, module) {
 				canHandle: function(data) {
 					return data.type == 'image' || (data.type == 'file' && ['png', 'jpg', 'jpeg', 'gif'].indexOf(Fn.pathinfo(data.path).extension) !== -1) ? 'image' : false;
 				},
-				open: Extension.session.open.bind(Extension.session),
-				active: Extension.session.active.bind(Extension.session),
-				focus: Extension.session.focus.bind(Extension.session),
-				close: Extension.session.close.bind(Extension.session)
+				open: this.sessionOpen,
+				active: this.sessionActive,
+				focus: this.sessionFocus,
+				close: this.sessionClose,
 			});
-		},
-		destroy: function(e) {
+		}
+		
+		destroy(e) {
+			super.destroy();
+			
 			EditorSplit.off('open', this.onSplitOpen);
 			EditorSplit.off('moveSession', this.onMoveSession);
 			
@@ -54,21 +70,23 @@ define(function(require, exports, module) {
 					EditorSession.close(i);
 				}
 			}
-		},
-		onSplitOpen: function(split) {
-			Extension.build(split);
-		},
-		onMoveSession: function(session, split) {
+		}
+		
+		onSplitOpen(split) {
+			this.build(split);
+		}
+		
+		onMoveSession(session, split) {
 			if (session.storage.type === 'image') {
-				// var box = EditorSplit.getSplit(e.split).find('.image-holder');
-				// Extension.getElem(e.sessionId).appendTo(box);
 				session.$image.appendTo(split.$el.find('.image-holder'));
 			}
-		},
-		build: function(split) {
-			split.$el.find('.box-container-inner').append('<div class="holder image-holder"></div>');
-		},
-		getMimeName: function(path) {
+		}
+		
+		build(split) {
+			split.$el.find('.box-container').append('<div class="holder image-holder"></div>');
+		}
+		
+		getMimeName(path) {
 			var res = 'image/png';
 			switch (Fn.pathinfo(path).extension) {
 				case 'png':
@@ -86,122 +104,118 @@ define(function(require, exports, module) {
 			}
 			
 			return res;
-		},
-		session: {
-			open: function(session) {
-				var opened = session.opened;
-				
-				if (!opened) {
-					session.storage = $.extend(true, session.storage, {
-						name: Fn.pathinfo(session.storage.path).basename,
-						icon: 'design_image',
-						type: 'image',
-						extension: Fn.pathinfo(session.storage.path).extension
-					});
-					EditorSession.saveStorage();
-				}
-				
-				session.size = null;
-				session.mimeType = null;
-				session.width = null;
-				session.height = null;
-				
-				this.build(session);
-			},
-			build: function(session) {
-				var id = session.id;
-				
-				session.$image = $('<div class="image" data-id="' + session.id + '"></div>')
-				.hide().click(function() {
-					EditorSession.setFocus(session.id);
+		}
+		
+		sessionOpen(session) {
+			var opened = session.opened;
+			
+			if (!opened) {
+				Object.assign(session.storage, {
+					name: Fn.pathinfo(session.storage.path).basename,
+					icon: 'design_image',
+					type: 'image',
+					extension: Fn.pathinfo(session.storage.path).extension
 				});
-				
-				EditorSplit.get(session.storage.split).$el
-				.find('.image-holder').append(session.$image);
-				
-				session.status = EditorSession.status.DOWNLOADING;
-				session.indicatorStatus = EditorSession.indicatorStatus.DOWNLOADING;
-				
-				FileManager.get({
-					id: session.storage.workspaceId,
-					path: session.storage.path,
-					buffer: true,
-					file: function(file) {
-						if (!session.storage) {
-							return;
-						}
-						
-						if (!file) {
-							EditorSession.close(session.id);
-							
-							return false;
-						}
-						
-						var img = document.createElement('img');
-						img.onload = function() {
-							session.width = img.naturalWidth;
-							session.height = img.naturalHeight;
-							
-							if (session.focus) {
-								EditorSession.checkFocus(session);
-							}
-						};
-						img.src = 'data:' + Extension.getMimeName(session.storage.path) + ';base64,' + file.toString('base64');
-						img.dataset.size = file.length;
-						
-						session.size = file.length;
-						session.mimeType = Extension.getMimeName(session.storage.path);
-						session.width = img.naturalWidth;
-						session.height = img.naturalHeight;
-						
-						session.$image.append(img);
-						
-						session.status = EditorSession.status.READY;
-						session.indicatorStatus = EditorSession.indicatorStatus.DEFAULT;
-						
-						if (session.focus) {
-							EditorSession.checkFocus(session);
-						}
-					}
-				});
-			},
-			active: function(session) {
-				session.$image.parent().children().hide();
-				session.$image.show();
-			},
-			focus: function(session, $toolbar) {
-				var $workspace = $('<li class="sticky"></li>').text(Workspace.get(session.storage.workspaceId).name);
-				
-				var $path = $('<li class="sticky"></li>');
-				$path.text(session.storage.isNew ? __('New file') : session.storage.name);
-				
-				$toolbar.children('.toolbar-left').append($workspace);
-				$toolbar.children('.toolbar-left').append($path);
-				
-				if (session.size === null) {
+				EditorSession.storage.save();
+			}
+			
+			session.size = null;
+			session.mimeType = null;
+			session.width = null;
+			session.height = null;
+			
+			this.sessionBuild(session);
+		}
+		
+		sessionBuild(session) {
+			var id = session.id;
+			
+			session.$image = $('<div class="image" data-id="' + session.id + '"></div>')
+			.hide().click(() => {
+				EditorSession.setFocus(session.id);
+			});
+			
+			EditorSplit.get(session.storage.split).$el
+			.find('.image-holder').append(session.$image);
+			
+			session.status = EditorSession.status.downloading;
+			session.indicatorStatus = EditorSession.indicatorStatus.downloading;
+			
+			FileManager.get(session.storage.workspaceId, session.storage.path, {
+				buffer: true,
+			}).then(res => {
+				if (!EditorSession.exists(session)) {
 					return;
 				}
 				
-				var $res = $('<li></li>');
-				$res.text(session.width + 'x' + session.height + 'px');
+				var img = document.createElement('img');
+				img.onload = () => {
+					session.width = img.naturalWidth;
+					session.height = img.naturalHeight;
+					
+					if (session.isFocus) {
+						EditorSession.checkFocus(session);
+					}
+				};
+				img.src = 'data:' + this.getMimeName(session.storage.path) + ';base64,' + res.data.toString('base64');
+				img.dataset.size = res.data.length;
 				
-				var $size = $('<li></li>');
-				$size.text(FileManager.fileSize(session.size));
+				session.size = res.data.length;
+				session.mimeType = this.getMimeName(session.storage.path);
+				session.width = img.naturalWidth;
+				session.height = img.naturalHeight;
 				
-				var $mime = $('<li></li>');
-				$mime.text(session.mimeType);
+				session.$image.append(img);
 				
-				$toolbar.children('.toolbar-right').append($res);
-				$toolbar.children('.toolbar-right').append($size);
-				$toolbar.children('.toolbar-right').append($mime);
-			},
-			close: function(session) {
-				if (session.$image) {
-					session.$image.remove();
+				session.status = EditorSession.status.ready;
+				session.indicatorStatus = EditorSession.indicatorStatus.default;
+				
+				if (session.focus) {
+					EditorSession.checkFocus(session);
 				}
+			}).catch(e => {
+				EditorSession.close(session.id);
+			});
+		}
+		
+		sessionActive(session) {
+			session.$image.parent().children().hide();
+			session.$image.show();
+		}
+		
+		sessionFocus(session, $toolbar) {
+			var $workspace = $('<li class="sticky"></li>').text(Workspace.get(session.storage.workspaceId).name);
+			
+			var $path = $('<li class="sticky"></li>');
+			$path.text(session.storage.isNew ? 'New file' : session.storage.name);
+			
+			$toolbar.children('.toolbar-left').append($workspace);
+			$toolbar.children('.toolbar-left').append($path);
+			
+			if (session.size === null) {
+				return;
+			}
+			
+			var $res = $('<li></li>');
+			$res.text(session.width + 'x' + session.height + 'px');
+			
+			var $size = $('<li></li>');
+			$size.text(FileManager.size(session.size));
+			
+			var $mime = $('<li></li>');
+			$mime.text(session.mimeType);
+			
+			$toolbar.children('.toolbar-right').append($res);
+			$toolbar.children('.toolbar-right').append($size);
+			$toolbar.children('.toolbar-right').append($mime);
+		}
+		
+		sessionClose(session) {
+			if (session.$image) {
+				session.$image.remove();
 			}
 		}
-	});
+	}
 
-	module.exports = Extension;
+	module.exports = new Extension();
 });
