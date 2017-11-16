@@ -170,7 +170,7 @@ define(function(require, exports, module) {
 				session.status = EditorSession.status.ready;
 				session.indicatorStatus = EditorSession.indicatorStatus.default;
 				
-				if (session.focus) {
+				if (session.isFocus) {
 					EditorSession.checkFocus(session);
 				}
 			}).catch(e => {
@@ -183,31 +183,34 @@ define(function(require, exports, module) {
 			session.$image.show();
 		}
 		
-		sessionFocus(session, $toolbar) {
-			var $workspace = $('<li class="sticky"></li>').text(Workspace.get(session.storage.workspaceId).name);
-			
-			var $path = $('<li class="sticky"></li>');
-			$path.text(session.storage.isNew ? 'New file' : session.storage.name);
-			
-			$toolbar.children('.toolbar-left').append($workspace);
-			$toolbar.children('.toolbar-left').append($path);
+		sessionFocus(session, toolbar) {
+			let items = [{
+				name: 'workspace',
+				side: 'left',
+				el: $('<li class="sticky"></li>').text(Workspace.get(session.storage.workspaceId).name)[0],
+			}, {
+				name: 'name',
+				side: 'left',
+				el: $('<li class="sticky"></li>').text(session.storage.name)[0],
+			}];
 			
 			if (session.size === null) {
+				toolbar.add(items);
 				return;
 			}
 			
-			var $res = $('<li></li>');
-			$res.text(session.width + 'x' + session.height + 'px');
+			items.push({
+				name: 'resolution',
+				el: $('<li></li>').text(session.width + 'x' + session.height + 'px')[0],
+			}, {
+				name: 'size',
+				el: $('<li></li>').text(FileManager.size(session.size))[0],
+			}, {
+				name: 'mime',
+				el: $('<li></li>').text(session.mimeType)[0],
+			});
 			
-			var $size = $('<li></li>');
-			$size.text(FileManager.size(session.size));
-			
-			var $mime = $('<li></li>');
-			$mime.text(session.mimeType);
-			
-			$toolbar.children('.toolbar-right').append($res);
-			$toolbar.children('.toolbar-right').append($size);
-			$toolbar.children('.toolbar-right').append($mime);
+			toolbar.add(items);
 		}
 		
 		sessionClose(session) {
