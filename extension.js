@@ -48,7 +48,7 @@ define(function(require, exports, module) {
 			EditorSession.registerSessionHandler({
 				name: this.name,
 				canHandle: function(data) {
-					return data.type == 'image' || (data.type == 'file' && ['png', 'jpg', 'jpeg', 'gif'].indexOf(Fn.pathinfo(data.path).extension) !== -1) ? 'image' : false;
+					return data.type == 'image' || (data.type == 'file' && ['png', 'jpg', 'jpeg', 'gif', 'ico'].indexOf(Fn.pathinfo(data.path).extension) !== -1) ? 'image' : false;
 				},
 				open: this.sessionOpen,
 				active: this.sessionActive,
@@ -187,11 +187,11 @@ define(function(require, exports, module) {
 			let items = [{
 				name: 'workspace',
 				side: 'left',
-				el: $('<li class="sticky"></li>').text(Workspace.get(session.storage.workspaceId).name)[0],
+				el: $('<li class="sticky select"></li>').text(Workspace.get(session.storage.workspaceId).name)[0],
 			}, {
 				name: 'name',
 				side: 'left',
-				el: $('<li class="sticky"></li>').text(session.storage.name)[0],
+				el: $('<li class="sticky select"></li>').text(session.storage.name)[0],
 			}];
 			
 			if (session.size === null) {
@@ -201,13 +201,13 @@ define(function(require, exports, module) {
 			
 			items.push({
 				name: 'resolution',
-				el: $('<li></li>').text(session.width + 'x' + session.height + 'px')[0],
+				el: $('<li class="select"></li>').text(session.width + 'x' + session.height + 'px')[0],
 			}, {
 				name: 'size',
-				el: $('<li></li>').text(FileManager.size(session.size))[0],
+				el: $('<li class="select"></li>').text(FileManager.size(session.size))[0],
 			}, {
 				name: 'mime',
-				el: $('<li></li>').text(session.mimeType)[0],
+				el: $('<li class="select"></li>').text(session.mimeType)[0],
 			});
 			
 			toolbar.add(items);
